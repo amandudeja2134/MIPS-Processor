@@ -28,7 +28,7 @@ module InstMem (
  end
  endmodule
 
-module RegFile (
+module RegFile ( 
     input clk,reset, WriteEn,
     input [4:0] Read_Reg_Num_1,Read_Reg_Num_2,Write_Reg_Num,
     input [31:0] Write_Data,
@@ -36,12 +36,19 @@ module RegFile (
  );
 
  reg [7:0] RegFileContent [31:0];
-
+ integer i = 0;
  always @(reset) begin
     if(reset == 0)
     begin
-        for(integer i =0;i<32;i=i+1)begin
-            RegFileContent[i] = 0;
+         /*RegFileContent[0] = 0;RegFileContent[1] = 0;RegFileContent[2] = 0;RegFileContent[3] = 0;
+         RegFileContent[4] = 0;RegFileContent[5] = 0;RegFileContent[6] = 0;RegFileContent[7] = 0;
+         RegFileContent[8] = 0;RegFileContent[9] = 0;RegFileContent[10] = 0;RegFileContent[11] = 0;
+         RegFileContent[16] = 0;RegFileContent[17] = 0;RegFileContent[18] = 0;RegFileContent[19] = 0;
+         RegFileContent[20] = 0;RegFileContent[21] = 0;RegFileContent[22] = 0;RegFileContent[23] = 0;
+         RegFileContent[24] = 0;RegFileContent[25] = 0;RegFileContent[26] = 0;RegFileContent[27] = 0;
+         RegFileContent[28] = 0;RegFileContent[29] = 0;RegFileContent[30] = 0;RegFileContent[31] = 0;*/
+        for(i = 0;i<101;i = i+1)begin
+            RegFileContent[i] = i;
         end
     end
  end
@@ -60,13 +67,13 @@ module RegFile (
 module DataMem (
     input clk,reset,input [31:0] address, Write_Data,input MemWrite,MemRead,output reg [31:0] Read_Data
  );
-
+ integer i = 0;
  reg [31:0] DataMem [100:0];
 
  always @(reset) begin
     if(reset == 0)
     begin
-        for(integer i =0;i<101;i=i+1)begin
+        for(i = 0;i<101;i = i+1)begin
             DataMem[i] = i;
         end
     end
@@ -91,15 +98,15 @@ module mainControlUnit (
         6'b100011: ALUsrc = 1'b1;      // lw
         6'b101011: ALUsrc = 1'b1;      //sw
         6'b000000: ALUsrc = 1'b0;      //sub
-        6'b001110: ALUsrc = 1'b0;      //xori
+        6'b001110: ALUsrc = 1'b1;      //xori
         6'b000010: ALUsrc = 1'b0;      //j
     endcase
  end
  always @(*) begin
     case (instCode[31:26])
-        6'b100011: Regdst = 1'b1;      // lw
+        6'b100011: Regdst = 1'b0;      // lw
         6'b101011: Regdst = 1'b0;      //sw
-        6'b000000: Regdst = 1'b0;      //sub
+        6'b000000: Regdst = 1'b1;      //sub
         6'b001110: Regdst = 1'b0;       //xori
         6'b000010: Regdst = 1'bx;      //j
     endcase
@@ -275,6 +282,16 @@ module stage4(
 
  endmodule
 
+module Pcinitialise(input PCsrc_Final, output reg PC_src_final2);
+
+always @(*) begin
+
+  if(PCsrc_Final === 1'bz)
+      PC_src_final2 <= 0;
+   else
+      PC_src_final2 <= PCsrc_Final;
+  end
+ endmodule
 
 
 module completeProcessor(
@@ -282,13 +299,15 @@ module completeProcessor(
 
 
 
-   wire Regdst,RegWrite,RegWrite1,RegWrite2,RegWrite3,Regwrite_Final,ALUsrc,ALUsrc1,ALUsrc2,MemRead,MemRead1,MemRead2,MemRead3,MemWrite,MemWrite1,MemWrite2,MemWrite3,PCsrc,PCsrc1,PCsrc2,PCsrc_Final,MemtoReg,MemtoReg1,MemtoReg2,MemtoReg3,MemtoReg4;
+   wire Regdst,RegWrite,RegWrite1,RegWrite2,RegWrite3,Regwrite_Final,ALUsrc,ALUsrc1,ALUsrc2,MemRead,MemRead1,MemRead2,MemRead3,MemWrite,MemWrite1,MemWrite2,MemWrite3,PCsrc,PCsrc1,PCsrc2,PCsrc_Final,PC_src_final2,MemtoReg,MemtoReg1,MemtoReg2,MemtoReg3,MemtoReg4;
    wire [2:0] ALUop,ALUop1,ALUop2;
    wire [4:0] read_reg1,read_reg2,write_reg1,write_reg_Final,wreg_muxed,wregmuxed_s2,wregmuxed_s3;
    wire [5:0] instOp;
    wire [31:0] PCout_s3,currentPC,PCmuxed,instCode,write_address1,PCout1,Read_Data1,Read_Data2,Read_Data1_s2,Read_Data2_s2,write_address1_s2,PCout_s2,Read_Data2_s2_muxed,aluresult,result_address,write_data,Read_Data_mem,result_address_out,Write_Data_Final,Read_Data_mem_s4;
 
-   mux2x1 m1(PCout_s3,(currentPC+'d4),PCsrc_Final,PCmuxed);
+
+   Pcinitialise p2(PCsrc_Final,PC_src_final2);
+   mux2x1 m1((currentPC+'d4),PCout_s3,PC_src_final2,PCmuxed);
    PCevaluate p1(clk,reset,PCmuxed,currentPC);
    InstMem i1(currentPC,reset,instCode);
    stage1 s1(clk,(currentPC+'d4),instCode,instOp,read_reg1,read_reg2,write_reg1,write_address1,PCout1);
