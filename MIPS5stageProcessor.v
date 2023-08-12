@@ -1,5 +1,3 @@
-///// MIPS 5 STAGE PROCESSOR IMPLEMENTATION WITHOUT STALL OR FORWARDING
-
 module mux2x1(
    input [31:0] in1, in2,input select,output [31:0] out);
    assign out = select ? in2 : in1;
@@ -25,7 +23,7 @@ module InstMem (
         mem[8] = 8'h00; mem[9] = 8'h27; mem[10] = 8'h10; mem[11] = 8'h22; // 00271022 sub R2,R1,R7
         mem[12] = 8'h08; mem[13] = 8'h00; mem[14] = 8'h00; mem[15] = 8'h14; // 08000014 J L1
         mem[16] = 8'h00; mem[17] = 8'hC6; mem[18] = 8'h30; mem[19] = 8'h22; // 00C63022 Sub r6,r6,r6
-        mem[48] = 8'h00; mem[49] = 8'h65; mem[50] = 8'h20; mem[51] = 8'h22; // 00652022 sub r4,r3,r5
+        mem[80] = 8'h00; mem[81] = 8'h65; mem[82] = 8'h20; mem[83] = 8'h22; // 00652022 sub r4,r3,r5
     end
  end
  endmodule
@@ -42,13 +40,6 @@ module RegFile (
  always @(reset) begin
     if(reset == 0)
     begin
-         /*RegFileContent[0] = 0;RegFileContent[1] = 0;RegFileContent[2] = 0;RegFileContent[3] = 0;
-         RegFileContent[4] = 0;RegFileContent[5] = 0;RegFileContent[6] = 0;RegFileContent[7] = 0;
-         RegFileContent[8] = 0;RegFileContent[9] = 0;RegFileContent[10] = 0;RegFileContent[11] = 0;
-         RegFileContent[16] = 0;RegFileContent[17] = 0;RegFileContent[18] = 0;RegFileContent[19] = 0;
-         RegFileContent[20] = 0;RegFileContent[21] = 0;RegFileContent[22] = 0;RegFileContent[23] = 0;
-         RegFileContent[24] = 0;RegFileContent[25] = 0;RegFileContent[26] = 0;RegFileContent[27] = 0;
-         RegFileContent[28] = 0;RegFileContent[29] = 0;RegFileContent[30] = 0;RegFileContent[31] = 0;*/
         for(i = 0;i<101;i = i+1)begin
             RegFileContent[i] = i;
         end
@@ -92,7 +83,7 @@ module DataMem (
  endmodule
 
 module mainControlUnit (
-    input  clk,reset,input [31:26] instCode,output reg  Regdst,RegWrite,ALUsrc,MemRead,MemWrite,PCsrc,MemtoReg,output reg [2:0] ALUop
+    input  clk,reset,input [31:26] instCode,output reg  noop,Regdst,RegWrite,ALUsrc,MemRead,MemWrite,PCsrc,MemtoReg,output reg [2:0] ALUop
  );
 
  always @(*) begin
@@ -167,6 +158,33 @@ module mainControlUnit (
         6'b000010:  PCsrc = 1'b1;       //j
     endcase
  end
+
+ always @(*) begin
+    case (instCode[31:26])
+        6'b100011:  noop = 1'b0;     // lw
+        6'b101011:  noop = 1'b0;      //sw
+        6'b000000:  noop = 1'b0;     //sub
+        6'b001110:  noop = 1'b0;     //xori
+        6'b000010:  noop = 1'b1;     //j
+    endcase
+ end
+ endmodule
+
+module stall(
+   input clk,reset,noop, output reg noop_out, output y
+  );
+ always @(posedge clk) begin
+      if(!reset) begin
+       noop_out <= 0;
+      end 
+      else 
+        noop_out <= noop;   
+ end
+ /*always @(negedge noop ) begin
+     noop_out <= noop;
+ end*/
+ assign y = noop | noop_out;
+  
  endmodule
 
 module ALU (
@@ -194,38 +212,53 @@ module ALU (
  endmodule
 
 module PCevaluate(
-   input clk,reset,input [31:0] PC, output reg [31:0] PCnew);
+   input clk,reset,noop,input [31:0] PC, output reg [31:0] PCnew);
    
 
    always @(posedge clk or negedge reset) begin
         if(!reset)
            PCnew <=0;
-        else 
+        else if(noop)
+          PCnew <= PC - 'd4;
+         else 
           PCnew <= PC;
    end
 
  endmodule
 
 module stage1(
-  input clk,input [31:0] nextPC,instCode,output reg [5:0] instOp,
-  output reg [4:0] reg1,reg2,wreg,output reg [31:0] wad1,nextPC_out);
+  input clk,noop,input [31:0] nextPC,instCode,output reg [5:0] instOp,
+  output reg [4:0] reg1,reg2,wreg,output reg [27:0] wad2,output reg [31:0] wad1,nextPC_out);
 
-  always @(posedge clk ) begin
+
+  always @(posedge clk) begin
+   if(noop == 0)begin
       instOp <= instCode[31:26];
       reg1 <= instCode[25:21];
       reg2 <= instCode[20:16];
       wreg <= instCode[15:11];
       wad1 <= {16'b0000000000000000,instCode[15:0]};
+      wad2 <= {instCode[25:0],2'b00};
       nextPC_out <= nextPC;
+   end
+   else begin
+     instOp <= 0;
+      reg1 <= 0;
+      reg2 <= 0;
+      wreg <= 0;
+      wad1 <= 0;
+      wad2 <= 0;
+      nextPC_out <= nextPC;
+   end
   end 
 
  endmodule
 
 module stage2(
-   input clk, input [31:0] rd1,rd2,wad1,pcprev,input [4:0] wregMuxed, 
+   input clk, input [31:0] rd1,rd2,wad1,pcprev,input [27:0] wad2, input [4:0] wregMuxed, 
    input RegWrite,MemtoReg,PCsrc,MemWrite,MemRead,ALUsrc,input [2:0] ALUop,
    output reg RegWrite2,MemtoReg2,PCsrc2,MemWrite2,MemRead2,ALUsrc2,output reg [2:0] ALUop2,
-   output reg [31:0] rd1_out,rd2_out,wad1_out,pcnext,output reg [4:0] wregMuxed_out
+   output reg [31:0] rd1_out,rd2_out,wad1_out,pcnext,output reg [27:0] wad2_out,output reg [4:0] wregMuxed_out
  );
 
  always @(posedge clk ) begin
@@ -241,16 +274,17 @@ module stage2(
       ALUsrc2 <= ALUsrc;
       ALUop2 <= ALUop;
       wregMuxed_out <= wregMuxed;
+      wad2_out <= wad2;
 
  end
 
  endmodule
 
 module stage3(
-   input clk,input [31:0] pcupdated,aluresult,rd2,input [4:0] wregmuxed,
+   input clk,input [31:0] pcupdated,aluresult,rd2,input [27:0] wad2,input [4:0] wregmuxed,
    input RegWrite,MemRead,MemWrite,MemtoReg,PCsrc,
-   output reg [31:0] pcnext,result_address,write_data,output reg [4:0] wregmuxed_out,
-   output reg Regwrite2,MemRead2,MemWrite2,MemtoReg2,PCsrc2
+   output reg [31:0] pcnext,result_address,write_data,output reg [27:0] wad2_out, 
+   output reg [4:0] wregmuxed_out,output reg Regwrite2,MemRead2,MemWrite2,MemtoReg2,PCsrc2
  ); 
    
    always @(posedge clk ) begin
@@ -263,6 +297,7 @@ module stage3(
       result_address <= aluresult;
       write_data <= rd2;
       wregmuxed_out <= wregmuxed;
+      wad2_out <= wad2;
    end
 
  endmodule
@@ -284,9 +319,10 @@ module stage4(
 
  endmodule
 
-module Pcinitialise(input PCsrc_Final, output reg PC_src_final2);
+module Pcinitialise(
+   input PCsrc_Final, output reg PC_src_final2);
 
-always @(*) begin
+ always @(*) begin
 
   if(PCsrc_Final === 1'bz)
       PC_src_final2 <= 0;
@@ -295,35 +331,71 @@ always @(*) begin
   end
  endmodule
 
+module jump(
+   input [25:0] address,input [31:0] currentPC,output reg [31:0] address_out
+ );
+
+ always @(*) begin
+      address_out <= {currentPC[31:28],(address<<2)};
+ end
+
+ endmodule
 
 module completeProcessor(
    input clk,reset, output zeroflag);
 
 
 
-   wire Regdst,RegWrite,RegWrite1,RegWrite2,RegWrite3,Regwrite_Final,ALUsrc,ALUsrc1,ALUsrc2,MemRead,MemRead1,MemRead2,MemRead3,MemWrite,MemWrite1,MemWrite2,MemWrite3,PCsrc,PCsrc1,PCsrc2,PCsrc_Final,PC_src_final2,MemtoReg,MemtoReg1,MemtoReg2,MemtoReg3,MemtoReg4;
-   wire [2:0] ALUop,ALUop1,ALUop2;
+   wire noop_extended,noop,noop_out,Regdst,RegWrite,RegWrite2,RegWrite3,Regwrite_Final,ALUsrc,ALUsrc2,MemRead,MemRead2,MemRead3,MemWrite,MemWrite2,MemWrite3,PCsrc,PCsrc2,PCsrc_Final,PC_src_final2,MemtoReg,MemtoReg2,MemtoReg3,MemtoReg4;
+   wire [2:0] ALUop,ALUop2;
    wire [4:0] read_reg1,read_reg2,write_reg1,write_reg_Final,wreg_muxed,wregmuxed_s2,wregmuxed_s3;
    wire [5:0] instOp;
+   wire [27:0] jump_address1,jump_address2,jump_address3;
    wire [31:0] PCout_s3,currentPC,PCmuxed,instCode,write_address1,PCout1,Read_Data1,Read_Data2,Read_Data1_s2,Read_Data2_s2,write_address1_s2,PCout_s2,Read_Data2_s2_muxed,aluresult,result_address,write_data,Read_Data_mem,result_address_out,Write_Data_Final,Read_Data_mem_s4;
 
 
    Pcinitialise p2(PCsrc_Final,PC_src_final2);
-   mux2x1 m1((currentPC+'d4),PCout_s3,PC_src_final2,PCmuxed);
-   PCevaluate p1(clk,reset,PCmuxed,currentPC);
+   //mux2x1 m1((currentPC+'d4),PCout_s3,PC_src_final2,PCmuxed);  // branch
+   mux2x1 m1((currentPC+'d4),{currentPC[31:28],jump_address3},PC_src_final2,PCmuxed);  // jump
+   PCevaluate p1(clk,reset,noop_extended,PCmuxed,currentPC);
    InstMem i1(currentPC,reset,instCode);
-   stage1 s1(clk,(currentPC+'d4),instCode,instOp,read_reg1,read_reg2,write_reg1,write_address1,PCout1);
-   mainControlUnit c1(clk,reset,instOp,Regdst,RegWrite,ALUsrc,MemRead,MemWrite,PCsrc,MemtoReg,ALUop);
+   stage1 s1(clk,noop_extended,(currentPC+'d4),instCode,instOp,read_reg1,read_reg2,write_reg1,jump_address1,write_address1,PCout1);
+   mainControlUnit c1(clk,reset,instOp,noop,Regdst,RegWrite,ALUsrc,MemRead,MemWrite,PCsrc,MemtoReg,ALUop);
    RegFile r1(clk,reset,Regwrite_Final,read_reg1,read_reg2,write_reg_Final,Write_Data_Final,Read_Data1,Read_Data2);
    mux2x1_2 m2(instCode[20:16],instCode[15:11],Regdst,wreg_muxed);
-   stage2 s2(clk,Read_Data1,Read_Data2,write_address1,PCout1,wreg_muxed,RegWrite1,MemtoReg1,PCsrc1,MemWrite1,MemRead1,ALUsrc1,ALUop1,RegWrite2,MemtoReg2,PCsrc2,MemWrite2,MemRead2,ALUsrc2,ALUop2,Read_Data1_s2,Read_Data2_s2,write_address1_s2,PCout_s2,wregmuxed_s2);
+   stage2 s2(clk,Read_Data1,Read_Data2,write_address1,PCout1,jump_address1,wreg_muxed,RegWrite,MemtoReg,PCsrc,MemWrite,MemRead,ALUsrc,ALUop,RegWrite2,MemtoReg2,PCsrc2,MemWrite2,MemRead2,ALUsrc2,ALUop2,Read_Data1_s2,Read_Data2_s2,write_address1_s2,PCout_s2,jump_address2,wregmuxed_s2);
    mux2x1 m3(Read_Data2_s2,write_address1_s2,ALUsrc2,Read_Data2_s2_muxed);
    ALU a1(Read_Data1_s2,Read_Data2_s2_muxed,ALUop2,aluresult,zeroflag);
-   stage3 s3(clk,(PCout_s2 + (write_address1_s2<<2)),aluresult,Read_Data2_s2,wregmuxed_s2,RegWrite2,MemRead2,MemWrite2,MemtoReg2,PCsrc2,PCout_s3,result_address,write_data,wregmuxed_s3,RegWrite3,MemRead3,MemWrite3,MemtoReg3,PCsrc_Final);
+   stage3 s3(clk,(PCout_s2 + (write_address1_s2<<2)),aluresult,Read_Data2_s2,jump_address2,wregmuxed_s2,RegWrite2,MemRead2,MemWrite2,MemtoReg2,PCsrc2,PCout_s3,result_address,write_data,jump_address3,wregmuxed_s3,RegWrite3,MemRead3,MemWrite3,MemtoReg3,PCsrc_Final);
    DataMem d1(clk,reset,result_address,write_data,MemWrite3,MemRead3,Read_Data_mem);
    stage4 s4(clk,RegWrite3,MemtoReg3,Read_Data_mem,result_address,wregmuxed_s3,Regwrite_Final,MemtoReg4,Read_Data_mem_s4,result_address_out,write_reg_Final);
    mux2x1 m4(Read_Data_mem_s4,result_address_out,MemtoReg4,Write_Data_Final);
+   stall s5(clk,reset,noop,noop_out,noop_extended);
 
 
 
+ endmodule
+
+
+ module tb();
+  
+  reg clk,reset;
+  wire zeroflag;
+
+  completeProcessor c2(clk,reset,zeroflag);
+
+  initial begin
+    clk = 0;
+    forever begin
+        #50 clk = ~clk;
+    end
+end
+
+initial begin
+    reset = 0;
+    #400;
+    reset = 1;
+    #1500;
+end
+ 
  endmodule
