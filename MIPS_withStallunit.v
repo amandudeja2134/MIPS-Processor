@@ -1,15 +1,20 @@
 //STALL UNIT PRESENT FOR CONTROL HAZARDS
 
+
+// 32 BIT 2X1 MUX
 module mux2x1(
    input [31:0] in1, in2,input select,output [31:0] out);
    assign out = select ? in2 : in1;
  endmodule
 
+// 5 BIT 2X1 MUX
 module mux2x1_2(
    input [4:0] in1, in2,input select,output [4:0] out);
    assign out = select ? in2 : in1;
  endmodule
 
+
+// INSTRUCTION MEMORY
 module InstMem (
     input [31:0] pc, input reset, output [31:0] instCode
  );
@@ -30,6 +35,8 @@ module InstMem (
  end
  endmodule
 
+
+//REGISTER FILE
 module RegFile ( 
     input clk,reset, WriteEn,
     input [4:0] Read_Reg_Num_1,Read_Reg_Num_2,Write_Reg_Num,
@@ -59,6 +66,8 @@ module RegFile (
  end
  endmodule
 
+
+//DATA MEMORY
 module DataMem (
     input clk,reset,input [31:0] address, Write_Data,input MemWrite,MemRead,output reg [31:0] Read_Data
  );
@@ -84,6 +93,7 @@ module DataMem (
  end    
  endmodule
 
+//MAIN CONTROL UNIT
 module mainControlUnit (
     input  clk,reset,input [31:26] instCode,output reg  noop,Regdst,RegWrite,ALUsrc,MemRead,MemWrite,PCsrc,MemtoReg,output reg [2:0] ALUop
  );
@@ -189,6 +199,7 @@ module stall(
   
  endmodule
 
+// ALU UNIT
 module ALU (
     input [31:0] a,b,
     input [2:0] ALUop,
@@ -228,6 +239,8 @@ module PCevaluate(
 
  endmodule
 
+
+// REGISTER 1
 module stage1(
   input clk,noop,input [31:0] nextPC,instCode,output reg [5:0] instOp,
   output reg [4:0] reg1,reg2,wreg,output reg [27:0] wad2,output reg [31:0] wad1,nextPC_out);
@@ -256,6 +269,7 @@ module stage1(
 
  endmodule
 
+//REGISTER 2
 module stage2(
    input clk, input [31:0] rd1,rd2,wad1,pcprev,input [27:0] wad2, input [4:0] wregMuxed, 
    input RegWrite,MemtoReg,PCsrc,MemWrite,MemRead,ALUsrc,input [2:0] ALUop,
@@ -282,6 +296,8 @@ module stage2(
 
  endmodule
 
+
+//REGISTER 3
 module stage3(
    input clk,input [31:0] pcupdated,aluresult,rd2,input [27:0] wad2,input [4:0] wregmuxed,
    input RegWrite,MemRead,MemWrite,MemtoReg,PCsrc,
@@ -304,6 +320,7 @@ module stage3(
 
  endmodule
 
+//REGISTER 4
 module stage4(
    input clk,Regwrite,MemtoReg,input [31:0] read_data,alu_result,input [4:0] wregmuxed,
    output reg Regwrite2,MemtoReg2, output reg [31:0] read_out,aluresult_out,
@@ -321,6 +338,8 @@ module stage4(
 
  endmodule
 
+
+//PC STARTUP CASE
 module Pcinitialise(
    input PCsrc_Final, output reg PC_src_final2);
 
@@ -343,6 +362,7 @@ module jump(
 
  endmodule
 
+//TOP MODULE
 module completeProcessor(
    input clk,reset, output zeroflag);
 
@@ -378,7 +398,7 @@ module completeProcessor(
 
  endmodule
 
-
+ //TESTBENCH
  module tb();
   
   reg clk,reset;
